@@ -57,10 +57,6 @@ app.use(
   express.static(path.join(__dirname, "noteuploads")),
 );
 
-app.use(
-  "/api/esignatures",
-  express.static(path.join(__dirname, "esignatures")),
-);
 app.use("api/esignatures", express.static(path.join(__dirname, "esignatures")));
 // Custom static file serving with CORS
 
@@ -87,16 +83,16 @@ app.use(
 );
 
 var whitelist = [
+  "https://ithd-fe-three.vercel.app",
+  process.env.FRONTEND_URL,
   "http://localhost:3007",
-  "http://127.0.0.1:3007/",
-  "http://localhost",
-  "http://localhost:3007",
+  "http://127.0.0.1:3007",
   "http://localhost:5007",
-  "https://192.168.44.26:443",
-  "https://192.168.44.26:444",
   "http://192.168.44.26",
   "http://192.168.44.26:3007",
-];
+  "https://192.168.44.26:443",
+  "https://192.168.44.26:444",
+].filter(Boolean);
 
 // -ExecutionPolicy Bypass -File "D:\LMD WebApps\App Scripts\ARMS\run_ARMS_MW.ps1
 
@@ -113,7 +109,17 @@ app.use("/api/pmsticket", pmsticketRouter);
 // app.use('/api/headermaster',headerMasterRouter);
 
 app.set("trust proxy", true);
-
+app.use(
+  session({
+    cookie: { maxAge: 3600000, sameSite: "none", secure: true },
+    store: new MemoryStore({
+      checkPeriod: 3600000,
+    }),
+    resave: false,
+    secret: process.env.SESSION_SECRET,
+    saveUninitialized: false,
+  }),
+);
 // // catch 404 and forward to error handler
 // app.use(function(req, res, next) {
 //   next(createError(404));
