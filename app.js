@@ -90,6 +90,7 @@ app.use(
 
 var whitelist = [
   "https://ithd-fe-three.vercel.app",
+  "https://canyoufixit.vercel.app",
   process.env.FRONTEND_URL,
   "http://localhost:3007",
   "http://127.0.0.1:3007",
