@@ -49,6 +49,12 @@ var corsOptions = {
 };
 
 var app = express();
+
+var fs = require("fs");
+
+["uploads", "noteuploads", "esignatures"].forEach((dir) => {
+  fs.mkdirSync(path.join(__dirname, dir), { recursive: true });
+});
 app.use(cors(corsOptions));
 app.use("/api/uploads", express.static(path.join(__dirname, "uploads")));
 
