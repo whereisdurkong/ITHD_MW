@@ -5,18 +5,10 @@ const multer = require("multer");
 require("dotenv").config();
 const supabase = require("../supabase");
 
-const DIR = "./esignatures";
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, DIR);
-  },
-  filename: (req, file, cb) => {
-    cb(null, file.originalname);
-  },
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 },
 });
-
-const upload = multer({ storage, limits: { fileSize: 200 * 1024 * 1024 } });
 
 const signatureFileFilter = (req, file, cb) => {
   if (file.mimetype.startsWith("image/")) {
@@ -27,10 +19,22 @@ const signatureFileFilter = (req, file, cb) => {
 };
 
 const uploadSignature = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: signatureFileFilter,
 });
+
+const uploadSignatureToSupabase = async (file) => {
+  const fileName = file.originalname.replace(/\s+/g, "_");
+  const { data, error } = await supabase.storage
+    .from("esignatures")
+    .upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true, // overwrite if same username re-uploads
+    });
+  if (error) throw error;
+  return data.path;
+};
 
 function generatePmsTicketId() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -107,11 +111,9 @@ router.post("/create-ticket-user", async (req, res) => {
       });
 
       if (empInfo.emp_tier === "helpdesk") {
-        return res
-          .status(200)
-          .json({
-            message: "Ticket created successfully by HD, no email sent",
-          });
+        return res.status(200).json({
+          message: "Ticket created successfully by HD, no email sent",
+        });
       }
 
       if (empInfo.emp_tier === "user") {
@@ -637,18 +639,21 @@ router.post(
         return res.status(400).json({ message: "Missing required fields" });
       }
 
+      // Upload signature to Supabase Storage
+      const signaturePath = await uploadSignatureToSupabase(req.file);
+
       await supabase.from("pmsnotes_master").insert({
         note: notes,
         created_by: current_user,
         created_at: currentTimestamp,
         pmsticket_id,
-        signature: req.file.path,
+        signature: signaturePath, // now a Supabase storage path
         is_pms: is_pms === "true",
       });
 
       await supabase
         .from("pmsticket_master")
-        .update({ signature: req.file.path })
+        .update({ signature: signaturePath })
         .eq("pmsticket_id", pmsticket_id);
 
       await supabase.from("pmsticket_logs").insert({
@@ -662,7 +667,7 @@ router.post(
       console.log(`${current_user} placed a note with signature`);
       res
         .status(200)
-        .json({ message: "Note added successfully", file: req.file.filename });
+        .json({ message: "Note added successfully", file: signaturePath });
     } catch (err) {
       console.error("Internal Error: ", err);
       res
@@ -995,6 +1000,33 @@ router.get("/pmsticket-logs", async (req, res) => {
     console.log("/pmsticket-logs was triggered");
   } catch (err) {
     console.log("INTERNAL ERROR:", err);
+  }
+});
+
+// Get signed URLs for one or many signature paths
+router.post("/signature-urls", async (req, res) => {
+  try {
+    const { paths } = req.body; // array of storage paths
+    if (!Array.isArray(paths) || paths.length === 0) {
+      return res.json({});
+    }
+
+    const { data, error } = await supabase.storage
+      .from("esignatures")
+      .createSignedUrls(paths, 60 * 60); // 1 hour
+
+    if (error) throw error;
+
+    // Map: path -> signedUrl
+    const map = {};
+    data.forEach((item) => {
+      if (item.signedUrl) map[item.path] = item.signedUrl;
+    });
+
+    res.json(map);
+  } catch (err) {
+    console.error("Error generating signed URLs:", err);
+    res.status(500).json({ error: "Failed to generate URLs" });
   }
 });
 

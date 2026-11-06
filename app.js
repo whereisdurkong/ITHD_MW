@@ -63,9 +63,6 @@ app.use(
   express.static(path.join(__dirname, "noteuploads")),
 );
 
-app.use("api/esignatures", express.static(path.join(__dirname, "esignatures")));
-// Custom static file serving with CORS
-
 // view engine setup
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "jade");
